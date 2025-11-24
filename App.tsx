@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Wheel from './components/Wheel';
 import AdminPanel from './components/AdminPanel';
 import { Prize, User, DEFAULT_PRIZES, AppConfig } from './types';
-import { Settings, LogIn, Trophy, Coins, Gift } from 'lucide-react';
+import { Settings, LogIn, Trophy, Coins, Gift, HeadphonesIcon, ExternalLink } from 'lucide-react';
 
 const App: React.FC = () => {
   const [prizes, setPrizes] = useState<Prize[]>(DEFAULT_PRIZES);
@@ -15,12 +15,17 @@ const App: React.FC = () => {
   // App Configuration State
   const [appConfig, setAppConfig] = useState<AppConfig>({
     title: 'LuckSpin Pro',
-    logoUrl: null
+    logoUrl: null,
+    ipWhitelist: [], // Default empty means allow all for setup, until populated
+    customerServiceUrl: '',
+    wheelDisplayMode: 'IMAGE' // Default to Image mode as per previous requests
   });
   
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [usernameInput, setUsernameInput] = useState('');
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showCSModal, setShowCSModal] = useState(false);
+  const [currentIp, setCurrentIp] = useState<string>('');
   
   // Game State
   const [mustSpin, setMustSpin] = useState(false);
@@ -28,7 +33,20 @@ const App: React.FC = () => {
   const [showWinnerModal, setShowWinnerModal] = useState(false);
   const [winPrize, setWinPrize] = useState<Prize | null>(null);
 
-  // Sound effects would go here (optional)
+  // Fetch IP on Mount
+  useEffect(() => {
+    const fetchIp = async () => {
+      try {
+        const res = await fetch('https://api.ipify.org?format=json');
+        const data = await res.json();
+        setCurrentIp(data.ip);
+        console.log("Client IP:", data.ip);
+      } catch (err) {
+        console.error("Failed to fetch IP", err);
+      }
+    };
+    fetchIp();
+  }, []);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,6 +108,22 @@ const App: React.FC = () => {
     setUsernameInput('');
   };
 
+  const handleSettingsClick = () => {
+    // Logic:
+    // 1. If whitelist is empty, we assume it's fresh setup or open mode -> Allow Admin
+    // 2. If whitelist has IPs, check if currentIp is in it.
+    // 3. If match -> Allow Admin.
+    // 4. Else -> Show Customer Service Modal.
+    
+    const isWhitelisted = appConfig.ipWhitelist.length === 0 || appConfig.ipWhitelist.includes(currentIp);
+
+    if (isWhitelisted) {
+      setShowAdmin(true);
+    } else {
+      setShowCSModal(true);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-gaming-800 via-gaming-900 to-black flex flex-col font-sans text-slate-200">
       
@@ -120,9 +154,9 @@ const App: React.FC = () => {
             </div>
           )}
           <button 
-            onClick={() => setShowAdmin(true)}
+            onClick={handleSettingsClick}
             className="p-2 hover:bg-white/10 rounded-full transition-colors text-gray-400 hover:text-white"
-            title="Admin Panel"
+            title="Settings"
           >
             <Settings size={20} />
           </button>
@@ -160,7 +194,7 @@ const App: React.FC = () => {
                   type="submit"
                   className="w-full bg-gradient-to-r from-gaming-accent to-indigo-600 hover:from-indigo-500 hover:to-purple-600 text-white font-bold py-3 rounded-lg shadow-lg shadow-indigo-500/30 transition-all transform active:scale-95"
                 >
-                  Verify & Play
+                  Verify & Spin
                 </button>
               </form>
               <div className="mt-6 pt-6 border-t border-white/5 text-center">
@@ -214,7 +248,8 @@ const App: React.FC = () => {
             prizes={prizes} 
             mustSpin={mustSpin} 
             prizeNumber={prizeNumber} 
-            onStopSpinning={handleStopSpinning} 
+            onStopSpinning={handleStopSpinning}
+            displayMode={appConfig.wheelDisplayMode}
           />
         </div>
 
@@ -231,6 +266,39 @@ const App: React.FC = () => {
           setAppConfig={setAppConfig}
           close={() => setShowAdmin(false)} 
         />
+      )}
+
+      {/* Customer Service Modal */}
+      {showCSModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-gaming-800 border border-gaming-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <HeadphonesIcon className="text-gaming-accent" /> Support
+              </h3>
+              <button onClick={() => setShowCSModal(false)} className="text-gray-400 hover:text-white">✕</button>
+            </div>
+            
+            <p className="text-gray-300 mb-6 leading-relaxed">
+              If you have encountered any problems, please contact our customer service:
+            </p>
+
+            {appConfig.customerServiceUrl ? (
+              <a 
+                href={appConfig.customerServiceUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="block w-full text-center py-3 bg-gaming-accent hover:bg-violet-600 text-white font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                Contact Customer Service <ExternalLink size={18} />
+              </a>
+            ) : (
+              <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded text-yellow-200 text-sm text-center">
+                Customer service link has not been configured yet.
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Winner Modal */}
