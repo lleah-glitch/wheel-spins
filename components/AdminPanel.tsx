@@ -1,24 +1,29 @@
-
 import React, { useState, useRef } from 'react';
-import { Prize, PrizeType, User } from '../types';
+import { Prize, PrizeType, User, AppConfig } from '../types';
 import { generatePrizeConfig } from '../services/geminiService';
-import { Trash2, Plus, Sparkles, Save, Upload, Users, Settings, FileSpreadsheet } from 'lucide-react';
+import { Trash2, Plus, Sparkles, Save, Upload, Users, Settings, FileSpreadsheet, LayoutTemplate, Image as ImageIcon } from 'lucide-react';
 
 interface AdminPanelProps {
   prizes: Prize[];
   setPrizes: (prizes: Prize[]) => void;
   users: User[];
   setUsers: (users: User[]) => void;
+  appConfig: AppConfig;
+  setAppConfig: (config: AppConfig) => void;
   close: () => void;
 }
 
-const AdminPanel: React.FC<AdminPanelProps> = ({ prizes, setPrizes, users, setUsers, close }) => {
-  const [activeTab, setActiveTab] = useState<'users' | 'prizes'>('prizes');
+const AdminPanel: React.FC<AdminPanelProps> = ({ prizes, setPrizes, users, setUsers, appConfig, setAppConfig, close }) => {
+  const [activeTab, setActiveTab] = useState<'users' | 'prizes' | 'settings'>('prizes');
   const [userImportText, setUserImportText] = useState('');
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  
   const [tempPrizes, setTempPrizes] = useState<Prize[]>(prizes);
+  const [tempConfig, setTempConfig] = useState<AppConfig>(appConfig);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   const handleImportUsers = () => {
     const lines = userImportText.split('\n');
@@ -72,8 +77,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ prizes, setPrizes, users, setUs
           if (cell && cell.v) {
             const val = String(cell.v).trim();
             if (val && val.toLowerCase() !== 'name' && val.toLowerCase() !== 'username') {
-               // Simple check to potentially avoid header rows if user desires, 
-               // but generally we just take everything as requested.
                extractedNames.push(val);
             }
           }
@@ -95,13 +98,24 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ prizes, setPrizes, users, setUs
         console.error("Excel parsing error:", error);
         alert("Failed to parse Excel file. Ensure it is a valid .xlsx or .xls file.");
       } finally {
-        // Reset input so same file can be selected again if needed
         if (fileInputRef.current) {
            fileInputRef.current.value = '';
         }
       }
     };
     reader.readAsBinaryString(file);
+  };
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const result = evt.target?.result as string;
+      setTempConfig({ ...tempConfig, logoUrl: result });
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleGeneratePrizes = async () => {
@@ -142,6 +156,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ prizes, setPrizes, users, setUs
         {/* Tabs */}
         <div className="flex border-b border-gaming-700">
           <button 
+            onClick={() => setActiveTab('settings')}
+            className={`flex-1 py-3 font-medium transition-colors flex items-center justify-center gap-2 ${activeTab === 'settings' ? 'bg-gaming-700 text-white border-b-2 border-gaming-accent' : 'text-gray-400 hover:bg-gaming-700/50'}`}
+          >
+            <LayoutTemplate size={18} /> General Settings
+          </button>
+          <button 
             onClick={() => setActiveTab('prizes')}
             className={`flex-1 py-3 font-medium transition-colors flex items-center justify-center gap-2 ${activeTab === 'prizes' ? 'bg-gaming-700 text-white border-b-2 border-gaming-accent' : 'text-gray-400 hover:bg-gaming-700/50'}`}
           >
@@ -158,6 +178,73 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ prizes, setPrizes, users, setUs
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
           
+          {activeTab === 'settings' && (
+            <div className="space-y-6">
+              <div className="bg-gaming-900 p-6 rounded-lg border border-gaming-700">
+                 <h3 className="text-lg font-semibold mb-4 text-white">Application Appearance</h3>
+                 
+                 {/* Title Input */}
+                 <div className="mb-6">
+                   <label className="block text-sm font-medium text-gray-400 mb-2">Event Title (Displayed in Navbar)</label>
+                   <input 
+                     type="text" 
+                     value={tempConfig.title}
+                     onChange={(e) => setTempConfig({...tempConfig, title: e.target.value})}
+                     className="w-full bg-gaming-800 border border-gaming-700 rounded p-3 text-white focus:ring-2 focus:ring-gaming-accent outline-none"
+                     placeholder="e.g. Diwali Lucky Spin"
+                   />
+                 </div>
+
+                 {/* Logo Input */}
+                 <div className="mb-4">
+                   <label className="block text-sm font-medium text-gray-400 mb-2">Event Logo</label>
+                   <div className="flex items-start gap-6">
+                      <div className="flex-1">
+                        <div className="flex gap-2 mb-2">
+                           <input 
+                             type="file" 
+                             ref={logoInputRef}
+                             hidden
+                             accept="image/*"
+                             onChange={handleLogoUpload}
+                           />
+                           <button 
+                             onClick={() => logoInputRef.current?.click()}
+                             className="bg-gaming-700 hover:bg-gaming-600 text-white px-4 py-2 rounded flex items-center gap-2 transition-colors border border-gaming-600"
+                           >
+                             <Upload size={16} /> Upload Image
+                           </button>
+                           {tempConfig.logoUrl && (
+                             <button 
+                               onClick={() => setTempConfig({...tempConfig, logoUrl: null})}
+                               className="text-red-400 hover:text-red-300 px-3 py-2"
+                             >
+                               Reset to Default
+                             </button>
+                           )}
+                        </div>
+                        <p className="text-xs text-gray-500">Supported formats: PNG, JPG, GIF, SVG.</p>
+                      </div>
+
+                      {/* Preview */}
+                      <div className="flex flex-col items-center">
+                        <span className="text-xs text-gray-500 mb-2">Preview</span>
+                        <div className="w-16 h-16 bg-gaming-800 rounded-lg border border-gaming-600 flex items-center justify-center overflow-hidden">
+                           {tempConfig.logoUrl ? (
+                             <img src={tempConfig.logoUrl} alt="Logo Preview" className="w-full h-full object-contain" />
+                           ) : (
+                             <div className="w-10 h-10 bg-gradient-to-br from-gaming-accent to-pink-500 rounded-lg flex items-center justify-center">
+                                <GiftIcon />
+                             </div>
+                           )}
+                        </div>
+                      </div>
+                   </div>
+                 </div>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'users' && (
             <div className="space-y-6">
               <div className="bg-gaming-900 p-4 rounded-lg border border-gaming-700">
@@ -330,6 +417,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ prizes, setPrizes, users, setUs
           <button 
             onClick={() => {
               setPrizes(tempPrizes);
+              setAppConfig(tempConfig);
               close();
             }}
             className="px-6 py-2 bg-green-600 hover:bg-green-500 text-white rounded shadow-lg shadow-green-900/20 flex items-center gap-2 font-bold"

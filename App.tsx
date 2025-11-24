@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import Wheel from './components/Wheel';
 import AdminPanel from './components/AdminPanel';
-import { Prize, User, DEFAULT_PRIZES } from './types';
+import { Prize, User, DEFAULT_PRIZES, AppConfig } from './types';
 import { Settings, LogIn, Trophy, Coins, Gift } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -12,6 +11,12 @@ const App: React.FC = () => {
     { id: '1', name: 'Demo User 1', hasPlayed: false },
     { id: '2', name: 'Demo User 2', hasPlayed: false },
   ]);
+  
+  // App Configuration State
+  const [appConfig, setAppConfig] = useState<AppConfig>({
+    title: 'LuckSpin Pro',
+    logoUrl: null
+  });
   
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [usernameInput, setUsernameInput] = useState('');
@@ -90,12 +95,20 @@ const App: React.FC = () => {
       
       {/* Navbar */}
       <nav className="w-full p-4 md:p-6 flex justify-between items-center border-b border-white/10 backdrop-blur-md z-10 sticky top-0">
-        <div className="flex items-center gap-2">
-          <div className="w-10 h-10 bg-gradient-to-br from-gaming-accent to-pink-500 rounded-lg flex items-center justify-center shadow-lg shadow-purple-500/30">
-             <Gift className="text-white" />
-          </div>
+        <div className="flex items-center gap-3">
+          {appConfig.logoUrl ? (
+            <img 
+              src={appConfig.logoUrl} 
+              alt="Logo" 
+              className="w-10 h-10 rounded-lg object-contain bg-white/5 border border-white/10" 
+            />
+          ) : (
+            <div className="w-10 h-10 bg-gradient-to-br from-gaming-accent to-pink-500 rounded-lg flex items-center justify-center shadow-lg shadow-purple-500/30">
+               <Gift className="text-white" />
+            </div>
+          )}
           <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400 tracking-tight">
-            LuckSpin Pro
+            {appConfig.title}
           </h1>
         </div>
         
@@ -151,7 +164,7 @@ const App: React.FC = () => {
                 </button>
               </form>
               <div className="mt-6 pt-6 border-t border-white/5 text-center">
-                <p className="text-xs text-gray-500">Only whitelisted users can participate.</p>
+                <p className="text-xs text-gray-500">Only requirements available users can participate.</p>
               </div>
             </div>
           ) : (
@@ -214,6 +227,8 @@ const App: React.FC = () => {
           setPrizes={setPrizes} 
           users={users}
           setUsers={setUsers}
+          appConfig={appConfig}
+          setAppConfig={setAppConfig}
           close={() => setShowAdmin(false)} 
         />
       )}
