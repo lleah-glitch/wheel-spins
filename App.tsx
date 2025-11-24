@@ -140,11 +140,11 @@ const App: React.FC = () => {
         <div className="w-full md:w-1/3 max-w-md space-y-8 z-10">
           {!currentUser ? (
             <div className="bg-gaming-800/50 backdrop-blur-md border border-white/10 p-8 rounded-2xl shadow-2xl transform transition-all hover:scale-[1.01]">
-              <h2 className="text-3xl font-bold text-white mb-2">Enter the Game</h2>
-              <p className="text-gray-400 mb-6">Verify your eligibility to spin the wheel of fortune.</p>
+              <h2 className="text-3xl font-bold text-white mb-2">START TO SPIN</h2>
+              <p className="text-gray-400 mb-6">Verify your game user ID to spin the wheel of fortune.</p>
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Username</label>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Game User ID</label>
                   <div className="relative">
                     <input 
                       type="text" 
