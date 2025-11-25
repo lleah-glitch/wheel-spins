@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Prize, PrizeType, User, AppConfig } from '../types';
 import { generatePrizeConfig } from '../services/geminiService';
-import { Trash2, Plus, Sparkles, Save, Upload, Users, Settings, FileSpreadsheet, LayoutTemplate, Shield, Globe, X, Image as ImageIcon, Edit3, Grid } from 'lucide-react';
+import { Trash2, Plus, Sparkles, Save, Upload, Users, Settings, FileSpreadsheet, LayoutTemplate, Shield, Globe, X, Image as ImageIcon, Edit3, Grid, Download, UserCheck } from 'lucide-react';
 
 interface AdminPanelProps {
   prizes: Prize[];
@@ -16,6 +16,7 @@ interface AdminPanelProps {
 const AdminPanel: React.FC<AdminPanelProps> = ({ prizes, setPrizes, users, setUsers, appConfig, setAppConfig, close }) => {
   const [activeTab, setActiveTab] = useState<'users' | 'prizes' | 'settings'>('prizes');
   const [userImportText, setUserImportText] = useState('');
+  const [internalUserImportText, setInternalUserImportText] = useState(''); // For Internal Users
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   
@@ -27,6 +28,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ prizes, setPrizes, users, setUs
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const internalFileInputRef = useRef<HTMLInputElement>(null); // Ref for Internal Users Excel
   const logoInputRef = useRef<HTMLInputElement>(null);
   const prizeImageInputRef = useRef<HTMLInputElement>(null);
 
@@ -40,25 +42,39 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ prizes, setPrizes, users, setUs
     setTempConfig(appConfig);
   }, [appConfig]);
 
-  const handleImportUsers = () => {
-    const lines = userImportText.split('\n');
+  const parseUsersFromText = (text: string, isInternal: boolean = false): User[] => {
+    const lines = text.split('\n');
     const newUsers: User[] = [];
     lines.forEach((line) => {
       const cleanLine = line.trim();
       if (cleanLine) {
         newUsers.push({
-          id: `u-${Date.now()}-${Math.random()}`,
+          id: `${isInternal ? 'int' : 'u'}-${Date.now()}-${Math.random()}`,
           name: cleanLine,
-          hasPlayed: false
+          hasPlayed: false,
+          isInternal: isInternal
         });
       }
     });
-    setUsers([...users, ...newUsers]);
-    setUserImportText('');
-    alert(`Successfully imported ${newUsers.length} users.`);
+    return newUsers;
   };
 
-  const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportUsers = () => {
+    const newUsers = parseUsersFromText(userImportText, false);
+    setUsers([...users, ...newUsers]);
+    setUserImportText('');
+    alert(`Successfully imported ${newUsers.length} eligible users.`);
+  };
+
+  const handleImportInternalUsers = () => {
+    const newUsers = parseUsersFromText(internalUserImportText, true);
+    setUsers([...users, ...newUsers]);
+    setInternalUserImportText('');
+    alert(`Successfully imported ${newUsers.length} INTERNAL users (Rigged Win).`);
+  };
+
+  // Generic function to handle Excel uploads for both normal and internal users
+  const handleExcelUploadGeneric = (e: React.ChangeEvent<HTMLInputElement>, isInternal: boolean, inputRef: React.RefObject<HTMLInputElement | null>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -96,12 +112,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ prizes, setPrizes, users, setUs
 
         if (extractedNames.length > 0) {
           const newUsers: User[] = extractedNames.map(name => ({
-            id: `u-xls-${Date.now()}-${Math.random()}`,
+            id: `${isInternal ? 'int' : 'u'}-xls-${Date.now()}-${Math.random()}`,
             name: name,
-            hasPlayed: false
+            hasPlayed: false,
+            isInternal: isInternal
           }));
           setUsers([...users, ...newUsers]);
-          alert(`Successfully imported ${newUsers.length} users from Excel.`);
+          alert(`Successfully imported ${newUsers.length} ${isInternal ? 'INTERNAL' : ''} users from Excel.`);
         } else {
           alert("No data found in Column A.");
         }
@@ -110,10 +127,59 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ prizes, setPrizes, users, setUs
         console.error("Excel error:", error);
         alert("Failed to parse Excel file.");
       } finally {
-        if (fileInputRef.current) fileInputRef.current.value = '';
+        if (inputRef.current) inputRef.current.value = '';
       }
     };
     reader.readAsBinaryString(file);
+  };
+
+  // Wrapper for Eligible Users Excel Upload
+  const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    handleExcelUploadGeneric(e, false, fileInputRef);
+  };
+
+  // Wrapper for Internal Users Excel Upload
+  const handleInternalExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    handleExcelUploadGeneric(e, true, internalFileInputRef);
+  };
+
+  const formatTimeIST = (isoString?: string) => {
+    if (!isoString) return '-';
+    try {
+      return new Date(isoString).toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
+    } catch (e) {
+      return isoString;
+    }
+  };
+
+  const handleExportUsers = () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const XLSX = (window as any).XLSX;
+    if (!XLSX) {
+      alert("Excel library not loaded yet.");
+      return;
+    }
+
+    const data = users.map(u => ({
+      Name: u.name,
+      Status: u.hasPlayed ? 'Played' : 'Eligible',
+      Product: u.wonPrize || '-',
+      Time: formatTimeIST(u.playedAt)
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Users");
+    XLSX.writeFile(wb, "LuckyDraw_Users.xlsx");
   };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -268,29 +334,70 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ prizes, setPrizes, users, setUs
 
           {activeTab === 'users' && (
             <div className="space-y-6">
-              <div className="bg-gaming-900 p-4 rounded-lg border border-gaming-700">
-                <h3 className="text-lg font-semibold mb-2">Import Users</h3>
-                <textarea value={userImportText} onChange={(e) => setUserImportText(e.target.value)} className="w-full h-32 bg-gaming-800 border border-gaming-700 rounded p-3 text-white outline-none mb-3" placeholder="Paste names here..." />
-                <div className="flex gap-3">
-                  <button onClick={handleImportUsers} className="bg-gaming-accent text-white px-4 py-2 rounded flex items-center gap-2"><Upload size={18} /> Import Text</button>
-                  <input type="file" ref={fileInputRef} hidden accept=".xlsx, .xls" onChange={handleExcelUpload} />
-                  <button onClick={() => fileInputRef.current?.click()} className="bg-green-600 text-white px-4 py-2 rounded flex items-center gap-2"><FileSpreadsheet size={18} /> Import Excel</button>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Standard Import */}
+                <div className="bg-gaming-900 p-4 rounded-lg border border-gaming-700">
+                  <h3 className="text-lg font-semibold mb-2">Import Eligible Users</h3>
+                  <textarea value={userImportText} onChange={(e) => setUserImportText(e.target.value)} className="w-full h-24 bg-gaming-800 border border-gaming-700 rounded p-3 text-white outline-none mb-3" placeholder="Paste names here..." />
+                  <div className="flex gap-3 flex-wrap">
+                    <button onClick={handleImportUsers} className="bg-gaming-accent text-white px-4 py-2 rounded flex items-center gap-2 text-sm"><Upload size={16} /> Import Text</button>
+                    <input type="file" ref={fileInputRef} hidden accept=".xlsx, .xls" onChange={handleExcelUpload} />
+                    <button onClick={() => fileInputRef.current?.click()} className="bg-green-600 text-white px-4 py-2 rounded flex items-center gap-2 text-sm"><FileSpreadsheet size={16} /> Import Excel</button>
+                  </div>
+                </div>
+
+                {/* Internal User Import */}
+                <div className="bg-gaming-900 p-4 rounded-lg border border-orange-900/50">
+                  <h3 className="text-lg font-semibold mb-2 text-orange-400 flex items-center gap-2"><UserCheck size={20}/> Import Internal Users</h3>
+                  <p className="text-xs text-gray-400 mb-2">Users imported here will ALWAYS win the prize with the lowest probability.</p>
+                  <textarea value={internalUserImportText} onChange={(e) => setInternalUserImportText(e.target.value)} className="w-full h-24 bg-gaming-800 border border-orange-900/50 rounded p-3 text-white outline-none mb-3" placeholder="Paste internal user names..." />
+                  <div className="flex gap-3 flex-wrap">
+                    <button onClick={handleImportInternalUsers} className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded flex items-center gap-2 text-sm font-bold">
+                       <Upload size={16} /> Import Text
+                    </button>
+                    <input type="file" ref={internalFileInputRef} hidden accept=".xlsx, .xls" onChange={handleInternalExcelUpload} />
+                    <button onClick={() => internalFileInputRef.current?.click()} className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded flex items-center gap-2 text-sm font-bold">
+                       <FileSpreadsheet size={16} /> Import Excel
+                    </button>
+                  </div>
                 </div>
               </div>
-              <div className="bg-gaming-900 rounded-lg border border-gaming-700 overflow-hidden max-h-64 overflow-y-auto">
-                <table className="w-full text-left">
-                  <thead className="bg-gaming-800 text-gray-400 text-sm"><tr><th className="p-3">Name</th><th className="p-3">Status</th><th className="p-3">Product</th><th className="p-3">Action</th></tr></thead>
-                  <tbody>
-                    {users.map(u => (
-                      <tr key={u.id} className="border-b border-gaming-800 last:border-0">
-                        <td className="p-3">{u.name}</td>
-                        <td className="p-3"><span className={`text-xs px-2 py-1 rounded ${u.hasPlayed ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>{u.hasPlayed ? 'Played' : 'Eligible'}</span></td>
-                        <td className="p-3 text-sm text-gray-300">{u.wonPrize || '-'}</td>
-                        <td className="p-3"><button onClick={() => setUsers(users.filter(x => x.id !== u.id))} className="text-red-400"><Trash2 size={16}/></button></td>
+
+              <div className="mt-4">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-lg font-semibold">Registered Users ({users.length})</h3>
+                  <button onClick={handleExportUsers} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded flex items-center gap-2 text-sm font-bold">
+                    <Download size={16} /> Export to Excel
+                  </button>
+                </div>
+                <div className="bg-gaming-900 rounded-lg border border-gaming-700 overflow-hidden max-h-64 overflow-y-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-gaming-800 text-gray-400 text-sm">
+                      <tr>
+                        <th className="p-3">Name</th>
+                        <th className="p-3">Status</th>
+                        <th className="p-3">Product</th>
+                        <th className="p-3">Time (IST)</th>
+                        <th className="p-3">Action</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {users.map(u => (
+                        <tr key={u.id} className={`border-b border-gaming-800 last:border-0 ${u.isInternal ? 'bg-orange-900/10' : ''}`}>
+                          <td className="p-3 flex items-center gap-2">
+                             {u.name}
+                             {u.isInternal && <span className="px-1.5 py-0.5 bg-orange-500/20 text-orange-400 text-[10px] rounded uppercase font-bold tracking-wider">Internal</span>}
+                          </td>
+                          <td className="p-3"><span className={`text-xs px-2 py-1 rounded ${u.hasPlayed ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>{u.hasPlayed ? 'Played' : 'Eligible'}</span></td>
+                          <td className="p-3 text-sm text-gray-300">{u.wonPrize || '-'}</td>
+                          <td className="p-3 text-sm text-gray-400 font-mono">{formatTimeIST(u.playedAt)}</td>
+                          <td className="p-3"><button onClick={() => setUsers(users.filter(x => x.id !== u.id))} className="text-red-400"><Trash2 size={16}/></button></td>
+                        </tr>
+                      ))}
+                      {users.length === 0 && <tr><td colSpan={5} className="p-4 text-center text-gray-500">No users found.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}

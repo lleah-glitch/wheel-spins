@@ -20,6 +20,8 @@ export interface User {
   name: string;
   hasPlayed: boolean;
   wonPrize?: string; // Name of the prize won
+  isInternal?: boolean; // Flag for internal users (rigged win)
+  playedAt?: string; // ISO Timestamp of when they played
 }
 
 export interface AppConfig {

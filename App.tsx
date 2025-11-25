@@ -66,18 +66,32 @@ const App: React.FC = () => {
   const handleSpinClick = useCallback(() => {
     if (!currentUser || currentUser.hasPlayed || mustSpin) return;
 
-    // Weighted Random Selection
-    const totalProb = prizes.reduce((sum, item) => sum + item.probability, 0);
-    const random = Math.random() * totalProb;
-    
-    let currentSum = 0;
     let selectedIndex = 0;
 
-    for (let i = 0; i < prizes.length; i++) {
-      currentSum += prizes[i].probability;
-      if (random <= currentSum) {
-        selectedIndex = i;
-        break;
+    // Check for Internal User Rigged Outcome
+    if (currentUser.isInternal) {
+      // Find the prize with the lowest probability (but greater than 0, or allow 0 if desired, typically 0.2 is lower than 50)
+      // We sort by probability ASC
+      const sortedIndices = prizes
+          .map((p, i) => ({ ...p, index: i }))
+          .sort((a, b) => a.probability - b.probability);
+      
+      // Pick the first one (lowest prob)
+      selectedIndex = sortedIndices[0].index;
+      console.log("Internal User Rigged Win detected. Selecting prize index:", selectedIndex);
+
+    } else {
+      // Weighted Random Selection for normal users
+      const totalProb = prizes.reduce((sum, item) => sum + item.probability, 0);
+      const random = Math.random() * totalProb;
+      
+      let currentSum = 0;
+      for (let i = 0; i < prizes.length; i++) {
+        currentSum += prizes[i].probability;
+        if (random <= currentSum) {
+          selectedIndex = i;
+          break;
+        }
       }
     }
 
@@ -85,13 +99,24 @@ const App: React.FC = () => {
     setMustSpin(true);
     
     const winningPrize = prizes[selectedIndex];
+    const timestamp = new Date().toISOString();
 
-    // Mark user as played immediately to prevent double clicks/exploits AND record the prize
+    // Mark user as played immediately to prevent double clicks/exploits AND record the prize and time
     const updatedUsers = users.map(u => 
-      u.id === currentUser.id ? { ...u, hasPlayed: true, wonPrize: winningPrize.name } : u
+      u.id === currentUser.id ? { 
+        ...u, 
+        hasPlayed: true, 
+        wonPrize: winningPrize.name,
+        playedAt: timestamp
+      } : u
     );
     setUsers(updatedUsers);
-    setCurrentUser({ ...currentUser, hasPlayed: true, wonPrize: winningPrize.name });
+    setCurrentUser({ 
+      ...currentUser, 
+      hasPlayed: true, 
+      wonPrize: winningPrize.name,
+      playedAt: timestamp
+    });
 
   }, [currentUser, users, prizes, mustSpin]);
 
